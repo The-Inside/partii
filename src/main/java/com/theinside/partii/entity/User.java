@@ -3,6 +3,8 @@ package com.theinside.partii.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -21,10 +23,10 @@ public class User {
     @Column(unique = true, nullable = false)
     private String email;
 
-    @Column(nullable = false)
-    private String name;
+    private String password;
 
-    private String imageUrl;
+    @Column(nullable = false)
+    private String displayName;
 
     @Column(nullable = false)
     private String provider;
@@ -32,20 +34,57 @@ public class User {
     @Column(nullable = false)
     private String providerId;
 
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private String legalName;
+
+    private String bio;
 
     @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    private String generalLocation;
 
+    @Column(nullable = false)
+    private String primaryAddress;
+
+    @Column(nullable = false)
+    private String phoneNumber;
+
+    private LocalDate dob;
+
+    @Column(nullable = false)
+    private AccountStatus accountStatus;
+
+    private boolean isVerified = false;
+    private boolean isEnabled = true;
+    
+    @Builder.Default
+    private boolean isAdmin = false;
+    
+    @Builder.Default
+    private boolean profileCompleted = false;
+
+    private int totalRatings = 0;
+    private int averageRating;
+
+    private int eventsAttended = 0;
+    private int eventsOrganized = 0;
+    private int activeEventsCount = 0;
+
+    private String profilePictureUrl;
+
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(nullable = false)
+    private Instant updatedAt;
+
+    private Instant deletedAt;
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = Instant.now();
+        updatedAt = Instant.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = Instant.now();
     }
 }
