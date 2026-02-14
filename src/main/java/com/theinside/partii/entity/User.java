@@ -1,11 +1,11 @@
 package com.theinside.partii.entity;
 
+import com.theinside.partii.enums.AccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")

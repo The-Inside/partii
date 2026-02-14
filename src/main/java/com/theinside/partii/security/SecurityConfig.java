@@ -8,6 +8,8 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.web.SecurityFilterChain;
@@ -17,8 +19,13 @@ import org.springframework.web.client.RestTemplate;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import jakarta.servlet.http.HttpServletResponse;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -44,7 +51,7 @@ public class SecurityConfig {
                                             JwtAuthenticationFilter jwtAuthenticationFilter,
                                             OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/partii/api/v1/auth/**",
@@ -58,6 +65,26 @@ public class SecurityConfig {
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService)
                                 .oidcUserService(customOidcUserService)))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            // Return JSON 401 for API requests instead of redirecting to login
+                            if (request.getRequestURI().startsWith("/partii/api/")) {
+                                sendJsonError(response, HttpStatus.UNAUTHORIZED,
+                                    "Authentication required", "Please log in");
+                            } else {
+                                // For non-API requests, use default behavior (redirect to login)
+                                response.sendRedirect("/oauth2/authorization/google");
+                            }
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            // Return JSON 403 for API requests
+                            if (request.getRequestURI().startsWith("/partii/api/")) {
+                                sendJsonError(response, HttpStatus.FORBIDDEN,
+                                    "Access Denied", "You do not have permission to access this resource");
+                            } else {
+                                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access Denied");
+                            }
+                        }))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 // Security Headers
                 .headers(headers -> headers
@@ -69,7 +96,7 @@ public class SecurityConfig {
                                         "font-src 'self' data:; " +
                                         "connect-src 'self'; " +
                                         "frame-ancestors 'none'"))
-                        .frameOptions(frame -> frame.deny())
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                         .contentTypeOptions(withDefaults())  // Enables X-Content-Type-Options: nosniff
                 );
 
@@ -145,5 +172,28 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
+    }
+
+    /**
+     * Helper method to send JSON error responses for API endpoints.
+     */
+    private void sendJsonError(HttpServletResponse response, HttpStatus status, String title, String detail) throws IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+
+        String jsonError = String.format(
+            "{\"type\":\"https://api.partii.com/problems/%s\"," +
+            "\"title\":\"%s\"," +
+            "\"status\":%d," +
+            "\"detail\":\"%s\"," +
+            "\"timestamp\":\"%s\"}",
+            status.name().toLowerCase().replace("_", "-"),
+            title,
+            status.value(),
+            detail,
+            Instant.now()
+        );
+
+        response.getWriter().write(jsonError);
     }
 }

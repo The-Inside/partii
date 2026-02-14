@@ -64,7 +64,6 @@ public class UserController {
     ) {
         return userService.updateProfile(user.getUserId(), request);
     }
-
     // ===== Blocking Endpoints =====
 
     /**

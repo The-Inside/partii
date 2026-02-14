@@ -1,0 +1,60 @@
+package com.theinside.partii.dto;
+
+import com.theinside.partii.enums.EventType;
+import com.theinside.partii.enums.EventVisibility;
+import jakarta.validation.constraints.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * Request DTO for partial event updates (PATCH).
+ * All fields are optional to support flexible updates.
+ */
+public record UpdateEventRequest(
+
+    @Size(min = 3, max = 100, message = "Title must be between 3 and 100 characters")
+    String title,
+
+    @Size(max = 2000, message = "Description cannot exceed 2000 characters")
+    String description,
+
+    EventType eventType,
+
+    @Size(max = 500, message = "Location address cannot exceed 500 characters")
+    String locationAddress,
+
+    @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
+    @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
+    Double latitude,
+
+    @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180")
+    @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180")
+    Double longitude,
+
+    @Future(message = "Event date must be in the future")
+    LocalDateTime eventDate,
+
+    @Size(max = 500, message = "Image URL cannot exceed 500 characters")
+    String imageUrl,
+
+    @DecimalMin(value = "0.0", message = "Budget cannot be negative")
+    @Digits(integer = 10, fraction = 2, message = "Invalid budget format")
+    BigDecimal estimatedBudget,
+
+    @Size(max = 3, message = "Currency code must be 3 characters")
+    String currency,
+
+    @Min(value = 2, message = "Event must have at least 2 attendees")
+    @Max(value = 10000, message = "Event cannot exceed 10000 attendees")
+    Integer maxAttendees,
+
+    @Min(value = 0, message = "Age restriction cannot be negative")
+    Integer ageRestriction,
+
+    LocalDateTime paymentDeadline,
+
+    LocalDateTime joinDeadline,
+
+    EventVisibility visibility
+) {}

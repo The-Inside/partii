@@ -6,7 +6,7 @@ import com.theinside.partii.dto.GenericMessageResponse;
 import com.theinside.partii.dto.LoginRequest;
 import com.theinside.partii.dto.SignupRequest;
 import com.theinside.partii.dto.VerifyEmailRequest;
-import com.theinside.partii.entity.AccountStatus;
+import com.theinside.partii.enums.AccountStatus;
 import com.theinside.partii.entity.EmailVerificationToken;
 import com.theinside.partii.entity.PasswordResetToken;
 import com.theinside.partii.entity.User;

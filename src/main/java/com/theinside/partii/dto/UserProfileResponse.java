@@ -1,6 +1,6 @@
 package com.theinside.partii.dto;
 
-import com.theinside.partii.entity.AccountStatus;
+import com.theinside.partii.enums.AccountStatus;
 
 import java.time.Instant;
 import java.time.LocalDate;
