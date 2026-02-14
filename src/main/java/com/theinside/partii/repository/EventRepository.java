@@ -36,6 +36,8 @@ public interface EventRepository extends JpaRepository<Event, UUID>, JpaSpecific
 
     Page<Event> findByStatus(EventStatus status, Pageable pageable);
 
+    Page<Event> findByVisibility(EventVisibility visibility, Pageable pageable);
+
     // ===== Count Queries =====
 
     long countByOrganizerId(Long organizerId);
@@ -191,7 +193,7 @@ public interface EventRepository extends JpaRepository<Event, UUID>, JpaSpecific
     @Modifying
     @Query("""
         UPDATE Event e
-        SET e.status = 'PAST', e.updatedAt = CURRENT_TIMESTAMP
+        SET e.status = 'PAST'
         WHERE e.status IN ('ACTIVE', 'FULL')
         AND e.eventDate < :now
         """)
@@ -203,7 +205,7 @@ public interface EventRepository extends JpaRepository<Event, UUID>, JpaSpecific
     @Modifying
     @Query("""
         UPDATE Event e
-        SET e.status = 'ARCHIVED', e.updatedAt = CURRENT_TIMESTAMP
+        SET e.status = 'ARCHIVED'
         WHERE e.status = 'PAST'
         AND e.eventDate < :archiveDate
         """)
@@ -227,4 +229,42 @@ public interface EventRepository extends JpaRepository<Event, UUID>, JpaSpecific
     // ===== Existence Checks =====
 
     boolean existsByPrivateLinkCode(String privateLinkCode);
+
+    // ===== Keyset Pagination (Cursor-Based) =====
+
+    /**
+     * Find public events using keyset pagination (significantly faster than offset).
+     * Uses composite key (eventDate, id) for stable ordering.
+     * Fetches limit+1 to determine if there's a next page.
+     */
+    @Query("""
+        SELECT e FROM Event e
+        WHERE e.visibility = 'PUBLIC'
+        AND e.status IN ('ACTIVE', 'FULL')
+        AND e.eventDate > :now
+        AND (CAST(:afterDate AS timestamp) IS NULL OR e.eventDate > :afterDate
+            OR (e.eventDate = :afterDate AND e.id > :afterId))
+        ORDER BY e.eventDate ASC, e.id ASC
+        """)
+    List<Event> findPublicEventsKeyset(
+        @Param("now") LocalDateTime now,
+        @Param("afterDate") LocalDateTime afterDate,
+        @Param("afterId") UUID afterId,
+        org.springframework.data.domain.Limit limit
+    );
+
+    /**
+     * Find all events using keyset pagination (admin only).
+     */
+    @Query("""
+        SELECT e FROM Event e
+        WHERE (CAST(:afterDate AS timestamp) IS NULL OR e.createdAt > :afterDate
+            OR (e.createdAt = :afterDate AND e.id > :afterId))
+        ORDER BY e.createdAt DESC, e.id ASC
+        """)
+    List<Event> findAllEventsKeyset(
+        @Param("afterDate") java.time.Instant afterDate,
+        @Param("afterId") UUID afterId,
+        org.springframework.data.domain.Limit limit
+    );
 }

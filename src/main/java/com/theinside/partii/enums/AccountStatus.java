@@ -1,4 +1,4 @@
-package com.theinside.partii.entity;
+package com.theinside.partii.enums;
 
 public enum AccountStatus {
     PENDING,
