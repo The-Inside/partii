@@ -1,9 +1,7 @@
 package com.theinside.partii.controller;
 
-import com.theinside.partii.dto.CreateEventRequest;
-import com.theinside.partii.dto.CursorPage;
-import com.theinside.partii.dto.EventResponse;
-import com.theinside.partii.dto.UpdateEventRequest;
+import com.theinside.partii.dto.*;
+import com.theinside.partii.enums.EventStatus;
 import com.theinside.partii.security.SecurityUser;
 import com.theinside.partii.service.EventService;
 import jakarta.validation.Valid;
@@ -11,13 +9,14 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 /**
  * REST controller for event operations.
@@ -63,12 +62,49 @@ public class EventController {
     }
 
     /**
+     * POST /api/events/search
+     * Search events with dynamic filters and sorting.
+     * Supports filtering by type, date range, budget, location, keywords, etc.
+     */
+    @PostMapping("/search")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<EventResponse>> searchEvents(
+        @Valid @RequestBody(required = false) EventSearchRequest searchRequest,
+        @PageableDefault(size = 20, sort = "eventDate") Pageable pageable
+    ) {
+        EventSearchRequest request = searchRequest != null ? searchRequest : new EventSearchRequest(
+            null, null, null, null, null, null, null, null, null, null, null, null, null
+        );
+        log.debug("Searching events with filters: {}", request);
+        Page<EventResponse> events = eventService.searchEvents(request, pageable);
+        return ResponseEntity.ok(events);
+    }
+
+    /**
+     * GET /api/events/my-events
+     * List events belonging to the authenticated user (organized and/or attending).
+     * Supports optional filters by event status and user role.
+     */
+    @GetMapping("/my-events")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<EventResponse>> getMyEvents(
+        @AuthenticationPrincipal SecurityUser user,
+        @RequestParam(required = false) EventStatus status,
+        @RequestParam(required = false) String role,
+        @PageableDefault(size = 20, sort = "eventDate") Pageable pageable
+    ) {
+        log.debug("Fetching my events for user: {}, status: {}, role: {}", user.getUserId(), status, role);
+        Page<EventResponse> events = eventService.getMyEvents(user.getUserId(), status, role, pageable);
+        return ResponseEntity.ok(events);
+    }
+
+    /**
      * GET /api/events/{id}
      * Get an event by its ID.
      */
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<EventResponse> getEvent(@PathVariable UUID id) {
+    public ResponseEntity<EventResponse> getEvent(@PathVariable Long id) {
         log.debug("Fetching event: {}", id);
         EventResponse response = eventService.getEvent(id);
         return ResponseEntity.ok(response);
@@ -81,7 +117,7 @@ public class EventController {
     @PatchMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<EventResponse> updateEvent(
-        @PathVariable UUID id,
+        @PathVariable Long id,
         @AuthenticationPrincipal SecurityUser user,
         @Valid @RequestBody UpdateEventRequest request
     ) {
@@ -97,7 +133,7 @@ public class EventController {
     @DeleteMapping("/{id}/delete")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deleteEvent(
-        @PathVariable UUID id,
+        @PathVariable Long id,
         @AuthenticationPrincipal SecurityUser user
     ) {
         log.info("Deleting event: {} by user: {}", id, user.getUserId());
@@ -112,7 +148,7 @@ public class EventController {
     @PatchMapping("/{id}/publish")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<EventResponse> publishEvent(
-        @PathVariable UUID id,
+        @PathVariable Long id,
         @AuthenticationPrincipal SecurityUser user
     ) {
         log.info("Publishing event: {} by user: {}", id, user.getUserId());
@@ -127,7 +163,7 @@ public class EventController {
     @PatchMapping("/{id}/cancel")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<EventResponse> cancelEvent(
-        @PathVariable UUID id,
+        @PathVariable Long id,
         @AuthenticationPrincipal SecurityUser user,
         @RequestBody(required = false) CancelEventRequest cancelRequest
     ) {

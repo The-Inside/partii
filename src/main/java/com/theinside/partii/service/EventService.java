@@ -1,13 +1,9 @@
 package com.theinside.partii.service;
 
-import com.theinside.partii.dto.CreateEventRequest;
-import com.theinside.partii.dto.CursorPage;
-import com.theinside.partii.dto.EventResponse;
-import com.theinside.partii.dto.UpdateEventRequest;
+import com.theinside.partii.dto.*;
+import com.theinside.partii.enums.EventStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.UUID;
 
 /**
  * Service interface for event operations.
@@ -29,7 +25,7 @@ public interface EventService {
      * @param eventId the event ID
      * @return the event response
      */
-    EventResponse getEvent(UUID eventId);
+    EventResponse getEvent(Long eventId);
 
     /**
      * Get an event by its private link code.
@@ -56,7 +52,7 @@ public interface EventService {
      * @param request the partial update request
      * @return the updated event response
      */
-    EventResponse updateEvent(UUID eventId, Long userId, UpdateEventRequest request);
+    EventResponse updateEvent(Long eventId, Long userId, UpdateEventRequest request);
 
     /**
      * Delete an event.
@@ -64,7 +60,7 @@ public interface EventService {
      * @param eventId the event ID
      * @param userId  the ID of the user deleting the event
      */
-    void deleteEvent(UUID eventId, Long userId);
+    void deleteEvent(Long eventId, Long userId);
 
     /**
      * Publish an event (change status to ACTIVE).
@@ -73,7 +69,7 @@ public interface EventService {
      * @param userId  the ID of the user publishing the event
      * @return the updated event response
      */
-    EventResponse publishEvent(UUID eventId, Long userId);
+    EventResponse publishEvent(Long eventId, Long userId);
 
     /**
      * Cancel an event.
@@ -83,7 +79,7 @@ public interface EventService {
      * @param reason  the cancellation reason
      * @return the updated event response
      */
-    EventResponse cancelEvent(UUID eventId, Long userId, String reason);
+    EventResponse cancelEvent(Long eventId, Long userId, String reason);
 
     /**
      * List public events using keyset pagination (significantly faster than offset).
@@ -102,4 +98,33 @@ public interface EventService {
      * @return cursor page of event responses
      */
     CursorPage<EventResponse> getAllEventsKeyset(String cursor, int limit);
+
+    /**
+     * Search events with dynamic filters and sorting.
+     *
+     * @param searchRequest the search criteria
+     * @param pageable      pagination and sorting information
+     * @return page of matching event responses
+     */
+    Page<EventResponse> searchEvents(EventSearchRequest searchRequest, Pageable pageable);
+
+    /**
+     * List all public and visible events.
+     *
+     * @param pageable pagination information
+     * @return page of event responses
+     */
+    Page<EventResponse> getPublicEvents(Pageable pageable);
+
+    /**
+     * List events belonging to the authenticated user.
+     * Includes events the user organized and events the user is attending.
+     *
+     * @param userId   the authenticated user's ID
+     * @param status   optional filter by event status
+     * @param role     optional filter by user's role ("organizer" or "attendee")
+     * @param pageable pagination and sorting information
+     * @return page of event responses
+     */
+    Page<EventResponse> getMyEvents(Long userId, EventStatus status, String role, Pageable pageable);
 }

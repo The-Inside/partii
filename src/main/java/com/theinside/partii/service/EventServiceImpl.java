@@ -12,6 +12,8 @@ import com.theinside.partii.mapper.EventMapper;
 import com.theinside.partii.repository.ContributionItemRepository;
 import com.theinside.partii.repository.EventRepository;
 import com.theinside.partii.repository.UserRepository;
+import com.theinside.partii.specification.EventSpecifications;
+import org.springframework.data.jpa.domain.Specification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -23,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Implementation of EventService.
@@ -95,7 +96,7 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
-    public EventResponse getEvent(UUID eventId) {
+    public EventResponse getEvent(Long eventId) {
         Event event = eventRepository.findById(eventId)
             .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
         return mapToEventResponse(event);
@@ -133,8 +134,26 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<EventResponse> getPublicEvents(Pageable pageable) {
+        return eventRepository.findByVisibility(com.theinside.partii.enums.EventVisibility.PUBLIC, pageable)
+            .map(this::mapToEventResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EventResponse> searchEvents(EventSearchRequest searchRequest, Pageable pageable) {
+        log.debug("Searching events with filters: {}", searchRequest);
+        Page<Event> events = eventRepository.findAll(
+            EventSpecifications.fromSearchRequest(searchRequest),
+            pageable
+        );
+        return events.map(this::mapToEventResponse);
+    }
+
+    @Override
     @Transactional
-    public EventResponse updateEvent(UUID eventId, Long userId, UpdateEventRequest request) {
+    public EventResponse updateEvent(Long eventId, Long userId, UpdateEventRequest request) {
         Event event = eventRepository.findById(eventId)
             .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
 
@@ -163,7 +182,7 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
-    public void deleteEvent(UUID eventId, Long userId) {
+    public void deleteEvent(Long eventId, Long userId) {
         Event event = eventRepository.findById(eventId)
             .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
 
@@ -183,7 +202,7 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
-    public EventResponse publishEvent(UUID eventId, Long userId) {
+    public EventResponse publishEvent(Long eventId, Long userId) {
         Event event = eventRepository.findById(eventId)
             .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
 
@@ -206,7 +225,7 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
-    public EventResponse cancelEvent(UUID eventId, Long userId, String reason) {
+    public EventResponse cancelEvent(Long eventId, Long userId, String reason) {
         Event event = eventRepository.findById(eventId)
             .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
 
@@ -233,7 +252,7 @@ public class EventServiceImpl implements EventService {
     public CursorPage<EventResponse> getPublicEvents(String cursorString, int limit) {
         EventCursor cursor = cursorString != null ? EventCursor.decode(cursorString) : null;
         LocalDateTime afterDate = cursor != null ? cursor.eventDate() : null;
-        UUID afterId = cursor != null ? cursor.id() : null;
+        Long afterId = cursor != null ? cursor.id() : null;
 
         // Fetch limit+1 to determine if there's a next page
         List<Event> events = eventRepository.findPublicEventsKeyset(
@@ -271,7 +290,7 @@ public class EventServiceImpl implements EventService {
         java.time.Instant afterDate = cursor != null
             ? cursor.eventDate().atZone(java.time.ZoneId.systemDefault()).toInstant()
             : null;
-        UUID afterId = cursor != null ? cursor.id() : null;
+        Long afterId = cursor != null ? cursor.id() : null;
 
         List<Event> events = eventRepository.findAllEventsKeyset(
             afterDate,
@@ -299,6 +318,19 @@ public class EventServiceImpl implements EventService {
             .toList();
 
         return CursorPage.of(responses, nextCursor, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EventResponse> getMyEvents(Long userId, EventStatus status, String role, Pageable pageable) {
+        Specification<Event> spec = Specification.where(EventSpecifications.hasOrganizer(userId));
+
+        if (status != null) {
+            spec = spec.and(EventSpecifications.hasStatus(status));
+        }
+
+        Page<Event> events = eventRepository.findAll(spec, pageable);
+        return events.map(this::mapToEventResponse);
     }
 
     private EventResponse mapToEventResponse(Event event) {
