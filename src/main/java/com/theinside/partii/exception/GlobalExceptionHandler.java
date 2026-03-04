@@ -194,6 +194,21 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ProblemDetail handleConflictException(ConflictException ex) {
+        logger.warn("Conflict: {}", ex.getMessage());
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                ex.getMessage()
+        );
+        problem.setType(URI.create(PROBLEM_BASE_URI + "conflict"));
+        problem.setTitle("Conflict");
+        problem.setProperty("timestamp", Instant.now());
+
+        return problem;
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ProblemDetail handleIllegalStateException(IllegalStateException ex) {
         logger.error("Illegal state: {}", ex.getMessage());

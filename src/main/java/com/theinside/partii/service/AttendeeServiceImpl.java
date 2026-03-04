@@ -14,6 +14,7 @@ import com.theinside.partii.repository.EventRepository;
 import com.theinside.partii.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,17 +33,13 @@ public class AttendeeServiceImpl implements AttendeeService {
 
     @Override
     public AttendeeResponse requestToJoin(Long eventId, Long userId) {
-        Event event = findEventOrThrow(eventId);
+        Event event = eventRepository.findByIdWithLock(eventId)
+            .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
         User user = findUserOrThrow(userId);
 
         // Cannot join your own event
         if (event.getOrganizer().getId().equals(userId)) {
             throw new BadRequestException("Organizer cannot join their own event");
-        }
-
-        // Check for duplicate request
-        if (attendeeRepository.existsByEventIdAndUserId(eventId, userId)) {
-            throw new IllegalStateException("You have already requested to join this event");
         }
 
         // Event must be ACTIVE or FULL (waitlist)
@@ -67,15 +64,19 @@ public class AttendeeServiceImpl implements AttendeeService {
             .status(initialStatus)
             .build();
 
-        EventAttendee saved = attendeeRepository.save(attendee);
-        log.info("User {} requested to join event {} with status {}", userId, eventId, initialStatus);
-
-        return toResponse(saved);
+        try {
+            EventAttendee saved = attendeeRepository.save(attendee);
+            log.info("User {} requested to join event {} with status {}", userId, eventId, initialStatus);
+            return toResponse(saved);
+        } catch (DataIntegrityViolationException e) {
+            throw new BadRequestException("You have already requested to join this event");
+        }
     }
 
     @Override
     public AttendeeResponse approveRequest(Long eventId, Long userId, Long organizerId) {
-        Event event = findEventOrThrow(eventId);
+        Event event = eventRepository.findByIdWithLock(eventId)
+            .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
         verifyOrganizer(event, organizerId);
 
         EventAttendee attendee = findAttendeeOrThrow(eventId, userId);
@@ -84,15 +85,13 @@ public class AttendeeServiceImpl implements AttendeeService {
             throw new BadRequestException("Only pending requests can be approved");
         }
 
-        if (!event.hasAvailableSpots()) {
+        int updated = eventRepository.incrementAttendeesIfAvailable(eventId);
+        if (updated == 0) {
             throw new BadRequestException("Event is at capacity. Increase max attendees first.");
         }
 
         attendee.approve();
-        event.incrementAttendees();
-
         attendeeRepository.save(attendee);
-        eventRepository.save(event);
         log.info("Organizer {} approved user {} for event {}", organizerId, userId, eventId);
 
         return toResponse(attendee);
@@ -118,7 +117,8 @@ public class AttendeeServiceImpl implements AttendeeService {
 
     @Override
     public void removeAttendee(Long eventId, Long userId, Long organizerId) {
-        Event event = findEventOrThrow(eventId);
+        Event event = eventRepository.findByIdWithLock(eventId)
+            .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
         verifyOrganizer(event, organizerId);
 
         EventAttendee attendee = findAttendeeOrThrow(eventId, userId);
@@ -128,10 +128,8 @@ public class AttendeeServiceImpl implements AttendeeService {
         }
 
         attendee.remove();
-        event.decrementAttendees();
-
+        eventRepository.decrementAttendeesIfPositive(eventId);
         attendeeRepository.save(attendee);
-        eventRepository.save(event);
         log.info("Organizer {} removed user {} from event {}", organizerId, userId, eventId);
 
         // Promote first waitlisted user to PENDING

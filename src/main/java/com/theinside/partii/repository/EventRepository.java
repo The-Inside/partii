@@ -4,10 +4,12 @@ import com.theinside.partii.entity.Event;
 import com.theinside.partii.enums.EventStatus;
 import com.theinside.partii.enums.EventType;
 import com.theinside.partii.enums.EventVisibility;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,6 +24,38 @@ import java.util.Optional;
  */
 @Repository
 public interface EventRepository extends JpaRepository<Event, Long>, JpaSpecificationExecutor<Event> {
+
+    // ===== Concurrency-Safe Queries =====
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Event e WHERE e.id = :id")
+    Optional<Event> findByIdWithLock(@Param("id") Long id);
+
+    @Modifying
+    @Query("""
+        UPDATE Event e
+        SET e.currentAttendees = e.currentAttendees + 1,
+            e.status = CASE
+                WHEN (e.currentAttendees + 1) >= e.maxAttendees THEN com.theinside.partii.enums.EventStatus.FULL
+                ELSE e.status
+            END
+        WHERE e.id = :id AND e.currentAttendees < e.maxAttendees
+        """)
+    int incrementAttendeesIfAvailable(@Param("id") Long id);
+
+    @Modifying
+    @Query("""
+        UPDATE Event e
+        SET e.currentAttendees = e.currentAttendees - 1,
+            e.status = CASE
+                WHEN e.status = com.theinside.partii.enums.EventStatus.FULL
+                     AND (e.currentAttendees - 1) < e.maxAttendees
+                THEN com.theinside.partii.enums.EventStatus.ACTIVE
+                ELSE e.status
+            END
+        WHERE e.id = :id AND e.currentAttendees > 0
+        """)
+    int decrementAttendeesIfPositive(@Param("id") Long id);
 
     // ===== Basic Queries =====
 

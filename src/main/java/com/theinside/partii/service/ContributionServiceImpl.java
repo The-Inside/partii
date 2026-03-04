@@ -6,8 +6,10 @@ import com.theinside.partii.entity.Event;
 import com.theinside.partii.entity.User;
 import com.theinside.partii.enums.*;
 import com.theinside.partii.exception.BadRequestException;
+import com.theinside.partii.exception.ConflictException;
 import com.theinside.partii.exception.ResourceNotFoundException;
 import com.theinside.partii.exception.UnauthorizedException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import com.theinside.partii.repository.ContributionItemRepository;
 import com.theinside.partii.repository.EventAttendeeRepository;
 import com.theinside.partii.repository.EventRepository;
@@ -150,18 +152,25 @@ public class ContributionServiceImpl implements ContributionService {
         verifyApprovedAttendee(eventId, userId);
         verifyEventActive(event);
 
-        ContributionItem item = findItemOrThrow(eventId, itemId);
-
         if (event.getOrganizer().getId().equals(userId)) {
             throw new BadRequestException("Organizer cannot claim items on their own event");
         }
 
-        User user = findUserOrThrow(userId);
-        item.claim(user); // throws IllegalStateException if not available
+        ContributionItem item = contributionItemRepository.findByIdWithLock(itemId)
+            .orElseThrow(() -> new ResourceNotFoundException("Contribution item not found"));
+        if (!item.getEvent().getId().equals(eventId)) {
+            throw new ResourceNotFoundException("Contribution item not found for this event");
+        }
 
-        ContributionItem saved = contributionItemRepository.save(item);
-        log.info("User {} claimed contribution item {} for event {}", userId, itemId, eventId);
-        return toResponse(saved);
+        User user = findUserOrThrow(userId);
+        try {
+            item.claim(user);
+            ContributionItem saved = contributionItemRepository.save(item);
+            log.info("User {} claimed contribution item {} for event {}", userId, itemId, eventId);
+            return toResponse(saved);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ConflictException("This item was modified by someone else. Please refresh and try again.");
+        }
     }
 
     @Override
@@ -183,7 +192,11 @@ public class ContributionServiceImpl implements ContributionService {
         verifyOrganizer(event, organizerId);
         verifyEventActive(event);
 
-        ContributionItem item = findItemOrThrow(eventId, itemId);
+        ContributionItem item = contributionItemRepository.findByIdWithLock(itemId)
+            .orElseThrow(() -> new ResourceNotFoundException("Contribution item not found"));
+        if (!item.getEvent().getId().equals(eventId)) {
+            throw new ResourceNotFoundException("Contribution item not found for this event");
+        }
 
         // Verify assignee is an approved attendee
         if (!attendeeRepository.existsByEventIdAndUserIdAndStatus(eventId, assigneeId, AttendeeStatus.APPROVED)) {
@@ -191,11 +204,14 @@ public class ContributionServiceImpl implements ContributionService {
         }
 
         User assignee = findUserOrThrow(assigneeId);
-        item.assign(assignee); // throws IllegalStateException if not available
-
-        ContributionItem saved = contributionItemRepository.save(item);
-        log.info("Organizer {} assigned contribution item {} to user {} for event {}", organizerId, itemId, assigneeId, eventId);
-        return toResponse(saved);
+        try {
+            item.assign(assignee);
+            ContributionItem saved = contributionItemRepository.save(item);
+            log.info("Organizer {} assigned contribution item {} to user {} for event {}", organizerId, itemId, assigneeId, eventId);
+            return toResponse(saved);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ConflictException("This item was modified by someone else. Please refresh and try again.");
+        }
     }
 
     @Override
