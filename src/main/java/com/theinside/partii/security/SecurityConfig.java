@@ -56,7 +56,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/partii/api/v1/auth/**",
                                 "/.well-known/jwks.json",
-                                "/error"
+                                "/error",
+                                "/ws/chat/**"
                         ).permitAll()
                         .requestMatchers("/partii/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
@@ -94,7 +95,7 @@ public class SecurityConfig {
                                         "style-src 'self' 'unsafe-inline'; " +
                                         "img-src 'self' data: https:; " +
                                         "font-src 'self' data:; " +
-                                        "connect-src 'self'; " +
+                                        "connect-src 'self' ws: wss:; " +
                                         "frame-ancestors 'none'"))
                         .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                         .contentTypeOptions(withDefaults())  // Enables X-Content-Type-Options: nosniff
